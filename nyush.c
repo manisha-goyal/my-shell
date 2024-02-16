@@ -5,7 +5,7 @@
 #include <limits.h>
 #include <string.h>
 
-int main() {
+int main(void) {
     char cwd[PATH_MAX]; 
     while (1) {
         if (getcwd(cwd, sizeof(cwd)) != NULL) {

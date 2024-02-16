@@ -4,3 +4,5 @@
 nyush.dSYM/Contents/Info.plist
 nyush.dSYM/Contents/Resources/DWARF/nyush
 nyush
+.DS_Store
+nyush.o
