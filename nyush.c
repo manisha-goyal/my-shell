@@ -11,7 +11,7 @@ int main() {
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             printf("[nyush %s]$ ", basename(cwd));
         } else {
-            fprintf(stderr, "Error in getting base directory, getcwd()");
+            fprintf(stderr, "Error in getting base directory, getcwd()\n");
             exit(-1);
         }
         fflush(stdout);
@@ -22,12 +22,31 @@ int main() {
         input_chars_read = getline(&input, &input_size, stdin);
 
         if (input_chars_read == -1) {
-            fprintf(stderr, "Error in getting user input, getline()");
+            fprintf(stderr, "Error: invalid command\n");
             free(input);
-            return 1;
+            exit(-1);
         }
 
-        printf("%s", input);
+        input[strcspn(input, "\n")] = 0;
+
+        pid_t pid = fork();
+        if (pid < 0) {
+            // Fork failed
+            fprintf(stderr, "Fork failed\n");
+            exit(-1);
+        } else if (pid == 0) {
+            // Child process
+            char *args[] = {input, NULL};
+            if (execvp(input, args) == -1) {
+                fprintf(stderr, "Error: invalid command\n");
+                exit(-1);
+            }
+        } else {
+            // Parent process
+            int status;
+            waitpid(pid, &status, 0);
+        }
+
         free(input);
     }
 }
