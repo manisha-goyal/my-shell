@@ -7,7 +7,7 @@
 
 char** read_and_tokenize_input(int *num_args);
 void memory_cleanup(char **args, int num_args);
-int builtin_commands(char **args, int num_args);
+int builtin_commands_handler(char **args, int num_args);
 
 int main(void) {
     char cwd[PATH_MAX]; 
@@ -28,7 +28,7 @@ int main(void) {
             continue;
         }
 
-        if (builtin_commands(args, num_args)) {
+        if (builtin_commands_handler(args, num_args)) {
             memory_cleanup(args, num_args);
             continue;
         }
@@ -88,23 +88,23 @@ char** read_and_tokenize_input(int *num_args) {
     return input_args;
 }
 
-int builtin_commands(char **args, int num_args) {
+int builtin_commands_handler(char **args, int num_args) {
+    if (strcmp(args[0], "cd") == 0) {
+        if (num_args != 2) {
+            fprintf(stderr, "Error: invalid command\n");
+        } else if (chdir(args[1]) != 0) {
+            fprintf(stderr, "Error: invalid directory\n");
+        }
+        return 1;
+    }
+
     if (strcmp(args[0], "exit") == 0) {
-        if(num_args!=1) {
+        if(num_args != 1) {
             fprintf(stderr, "Error: invalid command\n");
             return 1;
         }
         memory_cleanup(args, num_args);
         exit(EXIT_SUCCESS);
-    }
-    
-    if (strcmp(args[0], "cd") == 0) {
-        if (num_args < 2) {
-            fprintf(stderr, "Error: cd missing operand\n");
-        } else if (chdir(args[1]) != 0) {
-            fprintf(stderr, "Error: cd invalid directory\n");
-        }
-        return 1;
     }
     return 0;
 }
@@ -115,5 +115,8 @@ https://www.codecademy.com/resources/docs/c
 https://stackoverflow.com/questions/298510/how-to-get-the-current-directory-in-a-c-program
 https://opensource.com/article/22/5/safely-read-user-input-getline
 https://systems-encyclopedia.cs.illinois.edu/articles/c-strtok/
+https://www.geeksforgeeks.org/different-ways-to-copy-a-string-in-c-c/
 https://stackoverflow.com/questions/252782/strdup-what-does-it-do-in-c
+https://www.scaler.com/topics/c/string-comparison-in-c/
+https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-chdir-change-working-directory
 */
