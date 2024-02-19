@@ -68,12 +68,11 @@ char** read_and_tokenize_input(int *num_args, char **user_input) {
 
     char **input_args = (char **)malloc(sizeof(char *) * (input_chars_read + 1));
     char *saveptr;
-    *num_args = 0;
-    char *tok = strtok_r(input, " ", &saveptr);
-    while (tok != NULL) {
-        input_args[*num_args] = strdup(tok);
+    char *arg = strtok_r(input, " ", &saveptr);
+    while (arg != NULL) {
+        input_args[*num_args] = strdup(arg);
         (*num_args)++;
-        tok = strtok_r(NULL, " ", &saveptr);
+        arg = strtok_r(NULL, " ", &saveptr);
     }
 
     free(input);
@@ -82,6 +81,7 @@ char** read_and_tokenize_input(int *num_args, char **user_input) {
 
 /*
 References
+https://www.codecademy.com/resources/docs/c
 https://stackoverflow.com/questions/298510/how-to-get-the-current-directory-in-a-c-program
 https://opensource.com/article/22/5/safely-read-user-input-getline
 https://systems-encyclopedia.cs.illinois.edu/articles/c-strtok/
