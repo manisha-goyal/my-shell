@@ -6,11 +6,13 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 char** user_input_handler(int *num_args);
-void memory_cleanup(char **args, int num_args);
+void memory_cleanup(char **args);
 int builtin_commands_handler(char **args, int num_args);
 void command_path_handler(char **args, char **program_path);
+int io_redirection_handler(char **args);
 
 int main(void) {
     signal(SIGINT, SIG_IGN);
@@ -36,18 +38,28 @@ int main(void) {
         }
 
         if (builtin_commands_handler(args, num_args)) {
-            memory_cleanup(args, num_args);
+            memory_cleanup(args);
             continue;
         }
 
         char *program_path = NULL;
         command_path_handler(args, &program_path);
 
+        int io_redirection = io_redirection_handler(args);
+        if(io_redirection != 0) {
+            if (io_redirection == -1)
+                fprintf(stderr, "Error: invalid command\n");
+            if (io_redirection == -2 || io_redirection == -3)
+                fprintf(stderr, "Error: invalid file\n");
+            memory_cleanup(args);
+            continue;
+        }
+
         pid_t pid = fork();
         if (pid < 0) {
             fprintf(stderr, "Error: fork failed, unable to execute command\n");
             free(program_path);
-            memory_cleanup(args, num_args);
+            memory_cleanup(args);
             exit(EXIT_FAILURE);
         } else if (pid == 0) {
             signal(SIGINT, SIG_DFL);
@@ -56,7 +68,7 @@ int main(void) {
             if (execv(program_path, args) == -1) {
                 fprintf(stderr, "Error: invalid program\n");
                 free(program_path);
-                memory_cleanup(args, num_args);
+                memory_cleanup(args);
                 exit(EXIT_FAILURE);
             }
         } else {
@@ -66,14 +78,14 @@ int main(void) {
             } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
         }
         free(program_path);
-        memory_cleanup(args, num_args);
+        memory_cleanup(args);
     }
 }
 
-void memory_cleanup(char **args, int num_args){
-    for (int i = 0; i < num_args; i++) {
-        free(args[i]);
-    }
+void memory_cleanup(char **args) {
+    int i = 0;
+    while(args[i] != NULL)
+        free(args[i++]);
     free(args);
 }
 
@@ -121,7 +133,7 @@ int builtin_commands_handler(char **args, int num_args) {
             fprintf(stderr, "Error: invalid command\n");
             return 1;
         }
-        memory_cleanup(args, num_args);
+        memory_cleanup(args);
         exit(EXIT_SUCCESS);
     }
     return 0;
@@ -155,6 +167,66 @@ void command_path_handler(char **args, char **program_path) {
     }
 }
 
+int io_redirection_handler(char **args) {
+    int input_count = 0, output_count = 0;
+    char *input_file = NULL, *output_file = NULL;
+    int output_append = 0;
+    int num_args = 0;
+
+    while(args[num_args] != NULL) 
+        num_args++;
+
+    for (int i = 0; i < num_args; i++) {
+        if (strcmp(args[i], "<") == 0) {
+            input_count++;
+            if (input_count > 1 || i + 1 >= num_args) 
+                return -1;
+            input_file = args[i + 1];
+            if (access(input_file, F_OK) != 0) 
+                return -2;
+        } else if (strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0) {
+            output_count++;
+            if (output_count > 1 || i + 1 >= num_args) 
+                return -1;
+            output_file = args[i + 1];
+            output_append = strcmp(args[i], ">>") == 0;
+        }
+    }
+
+    if (input_file) {
+        int fd_in = open(input_file, O_RDONLY);
+        if (fd_in == -1) 
+            return -3;
+        dup2(fd_in, STDIN_FILENO);
+        close(fd_in);
+    }
+
+    if (output_file) {
+        int fd_out = open(output_file, output_append ? 
+                        (O_CREAT | O_WRONLY | O_APPEND) 
+                        : (O_CREAT | O_WRONLY | O_TRUNC), 
+                        (S_IRUSR | S_IWUSR));
+        if (fd_out == -1) 
+            return -3;
+        dup2(fd_out, STDOUT_FILENO);
+        close(fd_out);
+    }
+
+    for (int i = 0; i < num_args; i++) {
+        if (args[i] && (strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0)) {
+            for (int j = i; j < num_args - 2; j++) {
+                args[j] = args[j + 2];
+            }
+            args[num_args - 2] = NULL;
+            args[num_args - 1] = NULL;
+            i -= 1;
+            num_args -= 2;
+        }
+    }
+    return 0;
+}
+
+
 /*
 References
 https://www.codecademy.com/resources/docs/c
@@ -168,4 +240,5 @@ https://www.tutorialspoint.com/unix_system_calls/waitpid.htm
 https://www.scaler.com/topics/c/string-comparison-in-c/
 https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-chdir-change-working-directory
 https://www.geeksforgeeks.org/concatenating-two-strings-in-c/
+https://www.cs.utexas.edu/~theksong/posts/2020-08-30-using-dup2-to-redirect-output/
 */
