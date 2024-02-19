@@ -163,6 +163,8 @@ https://opensource.com/article/22/5/safely-read-user-input-getline
 https://systems-encyclopedia.cs.illinois.edu/articles/c-strtok/
 https://www.geeksforgeeks.org/different-ways-to-copy-a-string-in-c-c/
 https://stackoverflow.com/questions/252782/strdup-what-does-it-do-in-c
+https://stackoverflow.com/questions/4204915/please-explain-the-exec-function-and-its-family
+https://www.tutorialspoint.com/unix_system_calls/waitpid.htm
 https://www.scaler.com/topics/c/string-comparison-in-c/
 https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-chdir-change-working-directory
 https://www.geeksforgeeks.org/concatenating-two-strings-in-c/
