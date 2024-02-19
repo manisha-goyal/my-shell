@@ -6,3 +6,4 @@ nyush.dSYM/Contents/Resources/DWARF/nyush
 nyush
 .DS_Store
 nyush.o
+.vscode/c_cpp_properties.json

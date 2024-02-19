@@ -4,12 +4,19 @@
 #include <libgen.h>
 #include <limits.h>
 #include <string.h>
+#include <signal.h>
+#include <sys/wait.h>
 
 char** user_input_handler(int *num_args);
 void memory_cleanup(char **args, int num_args);
 int builtin_commands_handler(char **args, int num_args);
+void command_path_handler(char **args, char **program_path);
 
 int main(void) {
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+
     char cwd[PATH_MAX]; 
     while (1) {
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
@@ -33,22 +40,32 @@ int main(void) {
             continue;
         }
 
+        char *program_path = NULL;
+        command_path_handler(args, &program_path);
+
         pid_t pid = fork();
         if (pid < 0) {
             fprintf(stderr, "Error: fork failed, unable to execute command\n");
+            free(program_path);
             memory_cleanup(args, num_args);
             exit(EXIT_FAILURE);
         } else if (pid == 0) {
-            if (execvp(args[0], args) == -1) {
-                fprintf(stderr, "Error: execvp failed\n");
+            signal(SIGINT, SIG_DFL);
+            signal(SIGQUIT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
+            if (execv(program_path, args) == -1) {
+                fprintf(stderr, "Error: invalid program\n");
+                free(program_path);
                 memory_cleanup(args, num_args);
                 exit(EXIT_FAILURE);
             }
         } else {
             int status;
-            waitpid(pid, &status, 0);
+            do {
+                waitpid(pid, &status, WUNTRACED);
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
         }
-
+        free(program_path);
         memory_cleanup(args, num_args);
     }
 }
@@ -61,7 +78,7 @@ void memory_cleanup(char **args, int num_args){
 }
 
 char** user_input_handler(int *num_args) {
-    char *input = NULL;
+    char *input = malloc(1001 * sizeof(char));
     size_t input_size = 0;
     ssize_t input_chars_read = getline(&input, &input_size, stdin);
 
@@ -75,7 +92,7 @@ char** user_input_handler(int *num_args) {
         input[input_chars_read - 1] = '\0';
     }
 
-    char **input_args = (char **)malloc(sizeof(char *) * (input_chars_read + 1));
+    char **input_args = malloc(sizeof(char *) * (input_chars_read + 1));
     char *saveptr;
     char *arg = strtok_r(input, " ", &saveptr);
     while (arg != NULL) {
@@ -83,6 +100,7 @@ char** user_input_handler(int *num_args) {
         (*num_args)++;
         arg = strtok_r(NULL, " ", &saveptr);
     }
+    input_args[*num_args] = NULL;
 
     free(input);
     return input_args;
@@ -109,6 +127,34 @@ int builtin_commands_handler(char **args, int num_args) {
     return 0;
 }
 
+void command_path_handler(char **args, char **program_path) {
+    free(*program_path);
+    *program_path = NULL;
+
+    char *input_path = args[0];
+
+    if(input_path[0]=='/' || (input_path[0]=='.' && input_path[1]=='/')) {
+        *program_path = strdup(input_path);
+    }
+    else {
+        if (strchr(input_path, '/') != NULL) {
+            *program_path = malloc(strlen(input_path) + 3);
+            if (*program_path) {
+                strcpy(*program_path, "./");
+                strcat(*program_path, input_path);
+            }
+        }
+        else {
+            const char *program_dir = "/usr/bin/";
+            *program_path = malloc(strlen(input_path) + strlen(program_dir) + 1);
+            if (*program_path) {
+                strcpy(*program_path, program_dir);
+                strcat(*program_path, input_path);
+            }
+        }
+    }
+}
+
 /*
 References
 https://www.codecademy.com/resources/docs/c
@@ -119,4 +165,5 @@ https://www.geeksforgeeks.org/different-ways-to-copy-a-string-in-c-c/
 https://stackoverflow.com/questions/252782/strdup-what-does-it-do-in-c
 https://www.scaler.com/topics/c/string-comparison-in-c/
 https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-chdir-change-working-directory
+https://www.geeksforgeeks.org/concatenating-two-strings-in-c/
 */
