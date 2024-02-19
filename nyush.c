@@ -7,6 +7,7 @@
 
 char** read_and_tokenize_input(int *num_args);
 void memory_cleanup(char **args, int num_args);
+int builtin_commands(char **args, int num_args);
 
 int main(void) {
     char cwd[PATH_MAX]; 
@@ -22,8 +23,13 @@ int main(void) {
         int num_args = 0;
         char **args = read_and_tokenize_input(&num_args);
 
-        if (num_args == 0) {
-            free(args);
+        if (num_args == 0 || args == NULL) {
+            if (args) free(args);
+            continue;
+        }
+
+        if (builtin_commands(args, num_args)) {
+            memory_cleanup(args, num_args);
             continue;
         }
 
@@ -43,10 +49,7 @@ int main(void) {
             waitpid(pid, &status, 0);
         }
 
-        for (int i = 0; i < num_args; i++) {
-            free(args[i]);
-        }
-        free(args);
+        memory_cleanup(args, num_args);
     }
 }
 
@@ -83,6 +86,27 @@ char** read_and_tokenize_input(int *num_args) {
 
     free(input);
     return input_args;
+}
+
+int builtin_commands(char **args, int num_args) {
+    if (strcmp(args[0], "exit") == 0) {
+        if(num_args!=1) {
+            fprintf(stderr, "Error: invalid command\n");
+            return 1;
+        }
+        memory_cleanup(args, num_args);
+        exit(EXIT_SUCCESS);
+    }
+    
+    if (strcmp(args[0], "cd") == 0) {
+        if (num_args < 2) {
+            fprintf(stderr, "Error: cd missing operand\n");
+        } else if (chdir(args[1]) != 0) {
+            fprintf(stderr, "Error: cd invalid directory\n");
+        }
+        return 1;
+    }
+    return 0;
 }
 
 /*
