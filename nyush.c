@@ -5,7 +5,7 @@
 #include <limits.h>
 #include <string.h>
 
-char** read_and_tokenize_input(int *num_args);
+char** user_input_handler(int *num_args);
 void memory_cleanup(char **args, int num_args);
 int builtin_commands_handler(char **args, int num_args);
 
@@ -21,7 +21,7 @@ int main(void) {
         fflush(stdout);
 
         int num_args = 0;
-        char **args = read_and_tokenize_input(&num_args);
+        char **args = user_input_handler(&num_args);
 
         if (num_args == 0 || args == NULL) {
             if (args) free(args);
@@ -60,7 +60,7 @@ void memory_cleanup(char **args, int num_args){
     free(args);
 }
 
-char** read_and_tokenize_input(int *num_args) {
+char** user_input_handler(int *num_args) {
     char *input = NULL;
     size_t input_size = 0;
     ssize_t input_chars_read = getline(&input, &input_size, stdin);
