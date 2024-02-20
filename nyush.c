@@ -62,7 +62,7 @@ int main(void) {
                 if (io_redirection == -2 || io_redirection == -3)
                     fprintf(stderr, "Error: invalid file\n");
                 memory_cleanup(args);
-                continue;
+                exit(EXIT_FAILURE);
             }
             if (execv(program_path, args) == -1) {
                 fprintf(stderr, "Error: invalid program\n");
