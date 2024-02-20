@@ -45,16 +45,6 @@ int main(void) {
         char *program_path = NULL;
         command_path_handler(args, &program_path);
 
-        int io_redirection = io_redirection_handler(args);
-        if(io_redirection != 0) {
-            if (io_redirection == -1)
-                fprintf(stderr, "Error: invalid command\n");
-            if (io_redirection == -2 || io_redirection == -3)
-                fprintf(stderr, "Error: invalid file\n");
-            memory_cleanup(args);
-            continue;
-        }
-
         pid_t pid = fork();
         if (pid < 0) {
             fprintf(stderr, "Error: fork failed, unable to execute command\n");
@@ -65,6 +55,15 @@ int main(void) {
             signal(SIGINT, SIG_DFL);
             signal(SIGQUIT, SIG_DFL);
             signal(SIGTSTP, SIG_DFL);
+            int io_redirection = io_redirection_handler(args);
+            if(io_redirection != 0) {
+                if (io_redirection == -1)
+                    fprintf(stderr, "Error: invalid command\n");
+                if (io_redirection == -2 || io_redirection == -3)
+                    fprintf(stderr, "Error: invalid file\n");
+                memory_cleanup(args);
+                continue;
+            }
             if (execv(program_path, args) == -1) {
                 fprintf(stderr, "Error: invalid program\n");
                 free(program_path);
@@ -203,9 +202,9 @@ int io_redirection_handler(char **args) {
 
     if (output_file) {
         int fd_out = open(output_file, output_append ? 
-                        (O_CREAT | O_WRONLY | O_APPEND) 
-                        : (O_CREAT | O_WRONLY | O_TRUNC), 
-                        (S_IRUSR | S_IWUSR));
+                        O_CREAT | O_WRONLY | O_APPEND
+                        : O_CREAT | O_WRONLY | O_TRUNC, 
+                        S_IRUSR | S_IWUSR);
         if (fd_out == -1) 
             return -3;
         dup2(fd_out, STDOUT_FILENO);
