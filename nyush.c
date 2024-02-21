@@ -13,6 +13,7 @@ int builtin_commands_handler(char **args);
 void path_handler(char **args, char **program_path);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
+void single_command_handler(char **args);
 int has_pipe(char **args);
 char ***get_pipe_args(char **args);
 void pipe_commands_handler(char ***args_pipe);
@@ -67,34 +68,9 @@ int main(void) {
             memory_cleanup_pipe(args_pipe);
         }
         else {
-            pid_t pid = fork();
-            if (pid < 0) {
-                fprintf(stderr, "Error: fork failed, unable to execute command\n");
-                memory_cleanup(args);
-                continue;
-            } else if (pid == 0) {
-                signal(SIGINT, SIG_DFL);
-                signal(SIGQUIT, SIG_DFL);
-                signal(SIGTSTP, SIG_DFL);
-
-                path_handler(args, &program_path);
-                input_redirection_handler(args);
-                output_redirection_handler(args);
-                if (execv(program_path, args) == -1) {
-                    fprintf(stderr, "Error: invalid program\n");
-                    free(program_path);
-                    memory_cleanup(args);
-                    exit(EXIT_FAILURE);
-                }
-                
-            } else {
-                int status;
-                do {
-                    waitpid(pid, &status, WUNTRACED);
-                } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
-                free(program_path);
-                memory_cleanup(args);
-            }
+            single_command_handler(args);
+            free(program_path);
+            memory_cleanup(args);
         }
     }
     return EXIT_SUCCESS; 
@@ -271,6 +247,32 @@ void output_redirection_handler(char **args) {
     }
 }
 
+void single_command_handler(char **args) {
+    pid_t pid = fork();
+    char *program_path = NULL;
+    if (pid < 0) {
+        fprintf(stderr, "Error: fork failed, unable to execute command\n");
+        return;
+    } else if (pid == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+
+        path_handler(args, &program_path);
+        input_redirection_handler(args);
+        output_redirection_handler(args);
+        if (execv(program_path, args) == -1) {
+            fprintf(stderr, "Error: invalid program\n");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        int status;
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
+    }
+}
+
 int has_pipe(char **args) {
     int i = 0;
     int pipe_pos = -1;
@@ -337,6 +339,9 @@ void pipe_commands_handler(char ***args_pipe) {
     for (int i = 0; i < num_args_pipe; ++i) {
         pid_t pid = fork();
         if (pid == 0) {
+            signal(SIGINT, SIG_DFL);
+            signal(SIGQUIT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
             if (i > 0) {
                 dup2(pipes[(i - 1) * 2], 0);
             }
