@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-char** get_user_input(int *num_args);
+char** get_user_input(int *num_args, int *user_input_status);
 int builtin_commands_handler(char **args, int num_args);
 void path_handler(char **args, char **program_path);
 int io_redirection_handler(char **args);
@@ -34,14 +34,18 @@ int main(void) {
         }
 
         int num_args = 0;
-        char **args = get_user_input(&num_args);
+        int user_input_status = 0;
+        char **args = get_user_input(&num_args, &user_input_status);
         char *program_path = NULL;
         //char *program_path1 = NULL, *program_path2 = NULL;
 
-        if (num_args == 0 || args == NULL) {
+        if(user_input_status != 0) {
             if (args) 
                 free(args);
-            continue;
+            if (user_input_status == 1)
+                exit(EXIT_SUCCESS);
+            else
+                continue;
         }
 
         if (builtin_commands_handler(args, num_args)) {
@@ -105,13 +109,20 @@ int main(void) {
     return EXIT_SUCCESS; 
 }
 
-char** get_user_input(int *num_args) {
+char** get_user_input(int *num_args, int *user_input_status) {
     char *input = malloc(1001 * sizeof(char));
     size_t input_size = 0;
     ssize_t input_chars_read = getline(&input, &input_size, stdin);
+    *user_input_status = EXIT_SUCCESS;
 
     if (input_chars_read == -1) {
-        fprintf(stderr, "Error: getline failed, unable to execute command\n");
+        if(feof(stdin)) {
+            *user_input_status = EXIT_FAILURE;
+        }
+        else {
+            *user_input_status = -1;
+            fprintf(stderr, "Error: getline failed, unable to execute command\n");
+        }
         free(input); 
         return NULL;
     }
@@ -365,6 +376,7 @@ References
 https://www.codecademy.com/resources/docs/c
 https://stackoverflow.com/questions/298510/how-to-get-the-current-directory-in-a-c-program
 https://opensource.com/article/22/5/safely-read-user-input-getline
+https://stackoverflow.com/questions/1516122/how-to-capture-controld-signal
 https://systems-encyclopedia.cs.illinois.edu/articles/c-strtok/
 https://www.geeksforgeeks.org/different-ways-to-copy-a-string-in-c-c/
 https://stackoverflow.com/questions/252782/strdup-what-does-it-do-in-c
@@ -375,4 +387,11 @@ https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-chdir-change-working-direc
 https://www.geeksforgeeks.org/concatenating-two-strings-in-c/
 https://www.cs.utexas.edu/~theksong/posts/2020-08-30-using-dup2-to-redirect-output/
 https://www.educative.io/answers/how-to-use-the-pipe-system-call-for-inter-process-communication
+https://stackoverflow.com/questions/8389033/implementation-of-multiple-pipes-in-c
+https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
+*/
+
+
+/*Todo:
+Integrate I/O redirection with pipes
 */
