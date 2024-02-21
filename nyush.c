@@ -10,10 +10,10 @@
 
 char** get_user_input(int *user_input_status);
 int builtin_commands_handler(char **args);
-void path_handler(char **args, char **program_path);
+char *path_handler(char **args);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
-void single_command_handler(char **args);
+void single_command_handler(char **args, char *program_path);
 int has_pipe(char **args);
 char ***get_pipe_args(char **args);
 void pipe_commands_handler(char ***args_pipe);
@@ -39,7 +39,6 @@ int main(void) {
 
         int user_input_status = 0;
         char **args = get_user_input(&user_input_status);
-        char *program_path = NULL;
 
         if(user_input_status != 0) {
             if (args) 
@@ -68,7 +67,8 @@ int main(void) {
             memory_cleanup_pipe(args_pipe);
         }
         else {
-            single_command_handler(args);
+            char *program_path = path_handler(args);
+            single_command_handler(args, program_path);
             free(program_path);
             memory_cleanup(args);
         }
@@ -136,29 +136,28 @@ int builtin_commands_handler(char **args) {
     return EXIT_SUCCESS;
 }
 
-void path_handler(char **args, char **program_path) {
+char *path_handler(char **args) {
     char *input_path = args[0];
+    char *program_path = NULL;
 
     if(input_path[0]=='/' || (input_path[0]=='.' && input_path[1]=='/')) {
-        *program_path = strdup(input_path);
+        program_path = strdup(input_path);
     }
     else {
         if (strchr(input_path, '/') != NULL) {
-            *program_path = malloc(strlen(input_path) + 3);
-            if (*program_path) {
-                strcpy(*program_path, "./");
-                strcat(*program_path, input_path);
-            }
+            program_path = malloc(strlen(input_path) + 3);
+            strcpy(program_path, "./");
+            strcat(program_path, input_path);
         }
         else {
             const char *program_dir = "/usr/bin/";
-            *program_path = malloc(strlen(input_path) + strlen(program_dir) + 1);
-            if (*program_path) {
-                strcpy(*program_path, program_dir);
-                strcat(*program_path, input_path);
-            }
+            program_path = malloc(strlen(input_path) + strlen(program_dir) + 1);
+            strcpy(program_path, program_dir);
+            strcat(program_path, input_path);
         }
     }
+
+    return program_path;
 }
 
 void input_redirection_handler(char **args) {
@@ -247,9 +246,8 @@ void output_redirection_handler(char **args) {
     }
 }
 
-void single_command_handler(char **args) {
+void single_command_handler(char **args, char *program_path) {
     pid_t pid = fork();
-    char *program_path = NULL;
     if (pid < 0) {
         fprintf(stderr, "Error: fork failed, unable to execute command\n");
         return;
@@ -257,8 +255,6 @@ void single_command_handler(char **args) {
         signal(SIGINT, SIG_DFL);
         signal(SIGQUIT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
-
-        path_handler(args, &program_path);
         input_redirection_handler(args);
         output_redirection_handler(args);
         if (execv(program_path, args) == -1) {
@@ -309,8 +305,7 @@ char ***get_pipe_args(char **args) {
             for (int j = 0; j < arg_length; ++j)
                 args_pipe[args_pos][j] = strdup(args[counter + j]);
             
-            char *program_path = NULL;
-            path_handler(args_pipe[args_pos], &program_path);
+            char *program_path = path_handler(args_pipe[args_pos]);
             free(args_pipe[args_pos][0]);
             args_pipe[args_pos][0] = strdup(program_path);
             free(program_path);
@@ -337,6 +332,7 @@ void pipe_commands_handler(char ***args_pipe) {
     }
 
     for (int i = 0; i < num_args_pipe; ++i) {
+
         pid_t pid = fork();
         if (pid == 0) {
             signal(SIGINT, SIG_DFL);
