@@ -63,6 +63,8 @@ int main(void) {
         }
         else if(pipe_pos != -1) {
             char ***args_pipe = get_pipe_args(args);
+            if(args_pipe == NULL)
+                continue;
             pipe_commands_handler(args_pipe);
             memory_cleanup_pipe(args_pipe);
         }
@@ -273,12 +275,14 @@ int has_pipe(char **args) {
     int i = 0;
     int pipe_pos = -1;
     while (args[i] != NULL) {
-        if (strcmp(args[i], "|") == 0) {
+        if (strcmp(args[i], "|") == 0)
             pipe_pos = i;
-            return pipe_pos;
-        }
         i++;
     }
+
+    if(strcmp(args[i-1], "|") == 0)
+        pipe_pos = 0;
+
     return pipe_pos;
 }
 
@@ -302,8 +306,15 @@ char ***get_pipe_args(char **args) {
             int arg_length = i - counter;
             args_pipe[args_pos] = malloc((arg_length + 1) * sizeof(char *));
 
-            for (int j = 0; j < arg_length; ++j)
+            for (int j = 0; j < arg_length; ++j) {
+                if ((strcmp(args[counter + j], "<") == 0 && args_pos != 0) ||
+                    ((strcmp(args[counter + j], ">") == 0 || strcmp(args[counter + j], ">>") == 0) && args_pos != pipe_count - 1)) {
+                    fprintf(stderr, "Error: invalid command\n");
+                    free(args_pipe);
+                    return NULL;
+                }
                 args_pipe[args_pos][j] = strdup(args[counter + j]);
+            }
             
             char *program_path = path_handler(args_pipe[args_pos]);
             free(args_pipe[args_pos][0]);
@@ -332,12 +343,19 @@ void pipe_commands_handler(char ***args_pipe) {
     }
 
     for (int i = 0; i < num_args_pipe; ++i) {
-
         pid_t pid = fork();
         if (pid == 0) {
             signal(SIGINT, SIG_DFL);
             signal(SIGQUIT, SIG_DFL);
             signal(SIGTSTP, SIG_DFL);
+
+            if (i == 0) {
+                input_redirection_handler(args_pipe[i]);
+            }
+            if (i == num_args_pipe - 1) {
+                output_redirection_handler(args_pipe[i]);
+            }
+
             if (i > 0) {
                 dup2(pipes[(i - 1) * 2], 0);
             }
@@ -424,8 +442,4 @@ https://www.cs.utexas.edu/~theksong/posts/2020-08-30-using-dup2-to-redirect-outp
 https://www.educative.io/answers/how-to-use-the-pipe-system-call-for-inter-process-communication
 https://stackoverflow.com/questions/8389033/implementation-of-multiple-pipes-in-c
 https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
-*/
-
-/*Todo:
-Integrate I/O redirection with pipes
 */
