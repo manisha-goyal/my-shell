@@ -138,7 +138,6 @@ char** get_user_input(int *user_input_status) {
 }
 
 int builtin_commands_handler(char **args) {
-
     int num_args = get_num_args(args);
 
     if (strcmp(args[0], "cd") == 0) {
@@ -190,7 +189,6 @@ void input_redirection_handler(char **args) {
     char *input_file = NULL;
     int input_count = 0;
     int input_pos = -1;
-    
     int num_args = get_num_args(args);
 
     for (int i = 0; i < num_args; i++)
@@ -235,7 +233,6 @@ void output_redirection_handler(char **args) {
     int output_append = 0;
     int output_count = 0;
     int output_pos = -1;
-
     int num_args = get_num_args(args);
 
     for (int i = 0; i < num_args; i++)
@@ -293,31 +290,32 @@ char ***get_pipe_args(char **args) {
     int i=0;
 
     while (args[i] != NULL) {
-        if (strcmp(args[i], "|") == 0) {
+        if (strcmp(args[i], "|") == 0)
             pipe_count++;
-        }
         i++;
     }
 
     char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
-    int current_cmd = 0;
-    int start = 0;
+    int args_pos = 0;
+    int counter = 0;
 
     for (int i = 0; i <= num_args; ++i) {
         if (i == num_args || strcmp(args[i], "|") == 0) {
-            int current_cmd_length = i - start;
+            int arg_length = i - counter;
+            args_pipe[args_pos] = malloc((arg_length + 1) * sizeof(char *));
+
+            for (int j = 0; j < arg_length; ++j)
+                args_pipe[args_pos][j] = strdup(args[counter + j]);
+            
             char *program_path = NULL;
-            args_pipe[current_cmd] = malloc((current_cmd_length + 1) * sizeof(char *));
-            for (int j = 0; j < current_cmd_length; ++j) {
-                args_pipe[current_cmd][j] = strdup(args[start + j]);
-            }
-            path_handler(args_pipe[current_cmd], &program_path);
-            free(args_pipe[current_cmd][0]);
-            args_pipe[current_cmd][0] = strdup(program_path);
+            path_handler(args_pipe[args_pos], &program_path);
+            free(args_pipe[args_pos][0]);
+            args_pipe[args_pos][0] = strdup(program_path);
             free(program_path);
-            args_pipe[current_cmd][current_cmd_length] = NULL;
-            current_cmd++;
-            start = i + 1;
+            
+            args_pipe[args_pos][arg_length] = NULL;
+            args_pos++;
+            counter = i + 1;
         }
     }
     args_pipe[pipe_count] = NULL;
@@ -332,8 +330,7 @@ void pipe_commands_handler(char ***args_pipe) {
     for (int i = 0; i < num_args_pipe - 1; ++i) {
         if (pipe(pipes + i * 2) < 0) {
             fprintf(stderr, "Error: pipe failed, unable to execute command\n");
-            memory_cleanup_pipe(args_pipe);
-            exit(EXIT_FAILURE);
+            return;
         }
     }
 
@@ -358,8 +355,7 @@ void pipe_commands_handler(char ***args_pipe) {
             }
         } else if (pid < 0) {
             fprintf(stderr, "Error: fork failed, unable to execute command\n");
-            memory_cleanup_pipe(args_pipe);
-            exit(EXIT_FAILURE);
+            return;
         }
         else {
             pids[i] = pid;
