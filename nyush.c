@@ -306,12 +306,12 @@ char ***get_pipe_args(char **args) {
     int counter = 0;
     char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
 
-    for (i = 0; i <= num_args; ++i) {
+    for (i = 0; i <= num_args; i++) {
         if (i == num_args || strcmp(args[i], "|") == 0) {
             int arg_length = i - counter;
             args_pipe[args_pos] = malloc((arg_length + 1) * sizeof(char *));
 
-            for (int j = 0; j < arg_length; ++j) {
+            for (int j = 0; j < arg_length; j++) {
                 if ((strcmp(args[counter + j], "<") == 0 && args_pos != 0) ||
                     ((strcmp(args[counter + j], ">") == 0 || strcmp(args[counter + j], ">>") == 0) && args_pos != pipe_count - 1)) {
                     fprintf(stderr, "Error: invalid command\n");
@@ -341,14 +341,14 @@ void pipe_commands_handler(char ***args_pipe) {
     int pipes[2 * (num_args_pipe - 1)];
     pid_t pids[num_args_pipe];
 
-    for (int i = 0; i < num_args_pipe - 1; ++i) {
+    for (int i = 0; i < num_args_pipe - 1; i++) {
         if (pipe(pipes + i * 2) < 0) {
             fprintf(stderr, "Error: pipe failed, unable to execute command\n");
             return;
         }
     }
 
-    for (int i = 0; i < num_args_pipe; ++i) {
+    for (int i = 0; i < num_args_pipe; i++) {
         pid_t pid = fork();
         if (pid == 0) {
             signal(SIGINT, SIG_DFL);
@@ -370,7 +370,7 @@ void pipe_commands_handler(char ***args_pipe) {
                 dup2(pipes[i * 2 + 1], 1);
             }
 
-            for (int j = 0; j < 2 * (num_args_pipe - 1); ++j) {
+            for (int j = 0; j < 2 * (num_args_pipe - 1); j++) {
                 close(pipes[j]);
             }
 
@@ -387,12 +387,12 @@ void pipe_commands_handler(char ***args_pipe) {
         }
     }
 
-    for (int i = 0; i < 2 * (num_args_pipe - 1); ++i) {
+    for (int i = 0; i < 2 * (num_args_pipe - 1); i++) {
         close(pipes[i]);
     }
 
     int status;
-    for (int i = 0; i < num_args_pipe; ++i) {
+    for (int i = 0; i < num_args_pipe; i++) {
         do {
             waitpid(pids[i], &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
