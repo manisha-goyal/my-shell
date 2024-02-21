@@ -37,7 +37,6 @@ int main(void) {
         int user_input_status = 0;
         char **args = get_user_input(&num_args, &user_input_status);
         char *program_path = NULL;
-        //char *program_path1 = NULL, *program_path2 = NULL;
 
         if(user_input_status != 0) {
             if (args) 
@@ -371,8 +370,7 @@ void memory_cleanup_pipe(char ***args_pipe) {
     free(args_pipe);
 }
 
-/*
-References
+/*References
 https://www.codecademy.com/resources/docs/c
 https://stackoverflow.com/questions/298510/how-to-get-the-current-directory-in-a-c-program
 https://opensource.com/article/22/5/safely-read-user-input-getline
@@ -390,7 +388,6 @@ https://www.educative.io/answers/how-to-use-the-pipe-system-call-for-inter-proce
 https://stackoverflow.com/questions/8389033/implementation-of-multiple-pipes-in-c
 https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
 */
-
 
 /*Todo:
 Integrate I/O redirection with pipes
