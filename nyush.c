@@ -8,13 +8,15 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-char** user_input_handler(int *num_args);
-void memory_cleanup(char **args);
+char** get_user_input(int *num_args);
 int builtin_commands_handler(char **args, int num_args);
-void command_path_handler(char **args, char **program_path);
+void path_handler(char **args, char **program_path);
 int io_redirection_handler(char **args);
 int has_pipe(char **args);
-char** pipe_commands_handler(char **args, int pipe_pos, int num_args, int args_pos);
+char ***get_pipe_args(char **args, int num_args, int *num_args_pipe);
+void pipe_commands_handler(char ***args_pipe, int num_args_pipe);
+void memory_cleanup(char **args);
+void memory_cleanup_pipe(char ***args_pipe);
 
 int main(void) {
     signal(SIGINT, SIG_IGN);
@@ -32,8 +34,9 @@ int main(void) {
         }
 
         int num_args = 0;
-        char **args = user_input_handler(&num_args);
-        char *program_path = NULL, *program_path1 = NULL, *program_path2 = NULL;
+        char **args = get_user_input(&num_args);
+        char *program_path = NULL;
+        //char *program_path1 = NULL, *program_path2 = NULL;
 
         if (num_args == 0 || args == NULL) {
             if (args) 
@@ -54,81 +57,10 @@ int main(void) {
             continue;
         }
         else if(pipe_pos != -1) {
-            int pipefd[2];
-            if (pipe(pipefd) == -1) {
-                fprintf(stderr, "Error: pipe failed, unable to execute command\n");
-                memory_cleanup(args);
-                continue;
-            }
-
-            char **args1 = pipe_commands_handler(args, pipe_pos, num_args, 0);
-            char **args2 = pipe_commands_handler(args, pipe_pos, num_args, 1);
-            command_path_handler(args1, &program_path1);
-            command_path_handler(args2, &program_path2);
-
-            pid_t pid1 = fork();
-            if (pid1 < 0) {
-                fprintf(stderr, "Error: fork failed, unable to execute command\n");
-                free(program_path1);
-                free(program_path2);
-                memory_cleanup(args1);
-                memory_cleanup(args2);
-                memory_cleanup(args);
-                continue;
-            }
-            if (pid1 == 0) { // First child executes the first part of the pipeline
-                close(pipefd[0]);
-                dup2(pipefd[1], STDOUT_FILENO);
-                close(pipefd[1]);
-                if (execv(program_path1, args1) == -1) {
-                    fprintf(stderr, "Error: invalid program\n");
-                    free(program_path1);
-                    free(program_path2);
-                    memory_cleanup(args1);
-                    memory_cleanup(args2);
-                    memory_cleanup(args);
-                    exit(EXIT_FAILURE);
-                }
-            } else {
-                pid_t pid2 = fork();
-                if (pid2 < 0) {
-                    fprintf(stderr, "Error: fork failed, unable to execute command\n");
-                    free(program_path1);
-                    free(program_path2);
-                    memory_cleanup(args1);
-                    memory_cleanup(args2);
-                    memory_cleanup(args);
-                    continue;
-                }
-                if (pid2 == 0) {
-                    close(pipefd[1]);
-                    dup2(pipefd[0], STDIN_FILENO);
-                    close(pipefd[0]);
-                    
-                    if (execv(program_path2, args2) == -1) {
-                        fprintf(stderr, "Error: invalid program\n");
-                        free(program_path1);
-                        free(program_path2);
-                        memory_cleanup(args1);
-                        memory_cleanup(args2);
-                        memory_cleanup(args);
-                        exit(EXIT_FAILURE);
-                    }
-                } else {
-                    close(pipefd[0]);
-                    close(pipefd[1]);
-                    int status;
-                    do {
-                        waitpid(pid1, &status, 0);
-                        waitpid(pid2, &status, 0);
-                    } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
-                    free(program_path1);
-                    free(program_path2);
-                    memory_cleanup(args1);
-                    memory_cleanup(args2);
-                    memory_cleanup(args);
-                }
-            }
+            int num_args_pipe = 0;
+            char ***args_pipe = get_pipe_args(args, num_args, &num_args_pipe);
+            pipe_commands_handler(args_pipe, num_args_pipe);
+            memory_cleanup_pipe(args_pipe);
         }
         else {
             pid_t pid = fork();
@@ -141,7 +73,7 @@ int main(void) {
                 signal(SIGQUIT, SIG_DFL);
                 signal(SIGTSTP, SIG_DFL);
 
-                command_path_handler(args, &program_path);
+                path_handler(args, &program_path);
 
                 int io_redirection = io_redirection_handler(args);
                 if(io_redirection != 0) {
@@ -173,14 +105,7 @@ int main(void) {
     return EXIT_SUCCESS; 
 }
 
-void memory_cleanup(char **args) {
-    int i = 0;
-    while(args[i] != NULL)
-        free(args[i++]);
-    free(args);
-}
-
-char** user_input_handler(int *num_args) {
+char** get_user_input(int *num_args) {
     char *input = malloc(1001 * sizeof(char));
     size_t input_size = 0;
     ssize_t input_chars_read = getline(&input, &input_size, stdin);
@@ -230,7 +155,7 @@ int builtin_commands_handler(char **args, int num_args) {
     return EXIT_SUCCESS;
 }
 
-void command_path_handler(char **args, char **program_path) {
+void path_handler(char **args, char **program_path) {
     char *input_path = args[0];
 
     if(input_path[0]=='/' || (input_path[0]=='.' && input_path[1]=='/')) {
@@ -327,25 +252,112 @@ int has_pipe(char **args) {
     return pipe_pos;
 }
 
-char** pipe_commands_handler(char **arg, int pipe_pos, int num_args, int args_pos) {
-    if(args_pos == 0 ) {
-        char **pipe_args = malloc(sizeof(char *) * (pipe_pos + 1));
-        int i=0;
-        for(i=0; i<pipe_pos; i++) {
-            pipe_args[i] = strdup(arg[i]);
+char ***get_pipe_args(char **args, int num_args, int *num_args_pipe) {
+    int pipe_count = 1;
+
+    int i=0;
+    while (args[i] != NULL) {
+        if (strcmp(args[i], "|") == 0) {
+            pipe_count++;
         }
-        pipe_args[i] = NULL;
-        return pipe_args;
-    } else {
-        char **pipe_args = malloc(sizeof(char *) * (num_args - pipe_pos + 1));
-        int i=0;
-        int j=0;
-        for(i=pipe_pos + 1; i<num_args; i++) {
-            pipe_args[j++] = strdup(arg[i]);
-        }
-        pipe_args[j] = NULL;
-        return pipe_args;
+        i++;
     }
+
+    *num_args_pipe = pipe_count;
+    char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
+    int current_cmd = 0;
+    int start = 0;
+
+    for (int i = 0; i <= num_args; ++i) {
+        if (i == num_args || strcmp(args[i], "|") == 0) {
+            int current_cmd_length = i - start;
+            char *program_path = NULL;
+            args_pipe[current_cmd] = malloc((current_cmd_length + 1) * sizeof(char *));
+            for (int j = 0; j < current_cmd_length; ++j) {
+                args_pipe[current_cmd][j] = strdup(args[start + j]);
+            }
+            path_handler(args_pipe[current_cmd], &program_path);
+            free(args_pipe[current_cmd][0]);
+            args_pipe[current_cmd][0] = strdup(program_path);
+            free(program_path);
+            args_pipe[current_cmd][current_cmd_length] = NULL;
+            current_cmd++;
+            start = i + 1;
+        }
+    }
+    args_pipe[pipe_count] = NULL;
+    return args_pipe;
+}
+
+void pipe_commands_handler(char ***args_pipe, int num_args_pipe) {
+    int pipes[2 * (num_args_pipe - 1)];
+    pid_t pids[num_args_pipe];
+
+    for (int i = 0; i < num_args_pipe - 1; ++i) {
+        if (pipe(pipes + i * 2) < 0) {
+            fprintf(stderr, "Error: pipe failed, unable to execute command\n");
+            memory_cleanup_pipe(args_pipe);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    for (int i = 0; i < num_args_pipe; ++i) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            if (i > 0) {
+                dup2(pipes[(i - 1) * 2], 0);
+            }
+
+            if (i < num_args_pipe - 1) {
+                dup2(pipes[i * 2 + 1], 1);
+            }
+
+            for (int j = 0; j < 2 * (num_args_pipe - 1); ++j) {
+                close(pipes[j]);
+            }
+
+            if (execv(args_pipe[i][0], args_pipe[i]) == -1) {
+                fprintf(stderr, "Error: invalid program\n");
+                exit(EXIT_FAILURE);
+            }
+        } else if (pid < 0) {
+            fprintf(stderr, "Error: fork failed, unable to execute command\n");
+            memory_cleanup_pipe(args_pipe);
+            exit(EXIT_FAILURE);
+        }
+        else {
+            pids[i] = pid;
+        }
+    }
+
+    for (int i = 0; i < 2 * (num_args_pipe - 1); ++i) {
+        close(pipes[i]);
+    }
+
+    int status;
+    for (int i = 0; i < num_args_pipe; ++i) {
+        do {
+            waitpid(pids[i], &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
+    }
+}
+
+void memory_cleanup(char **args) {
+    int i = 0;
+    while(args[i] != NULL)
+        free(args[i++]);
+    free(args);
+}
+
+void memory_cleanup_pipe(char ***args_pipe) {
+    int i = 0;
+    while(args_pipe[i] != NULL) {
+        int j=0;
+        while(args_pipe[i][j] != NULL)
+            free(args_pipe[i][j++]);
+        free(args_pipe[i++]);
+    }
+    free(args_pipe);
 }
 
 /*
