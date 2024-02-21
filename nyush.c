@@ -29,7 +29,7 @@ int main(void) {
 
     char cwd[PATH_MAX]; 
     while (1) {
-        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        if (getcwd(cwd, sizeof(cwd))) {
             printf("[nyush %s]$ ", basename(cwd));
             fflush(stdout);
         } else {
@@ -96,22 +96,23 @@ char** get_user_input(int *user_input_status) {
         return NULL;
     }
 
-    if (input[input_chars_read - 1] == '\n') {
+    if (input[input_chars_read - 1] == '\n')
         input[input_chars_read - 1] = '\0';
-    }
-
-    char **input_args = malloc(sizeof(char *) * (input_chars_read + 1));
+    
     char *saveptr;
     char *arg = strtok_r(input, " ", &saveptr);
     int num_args = 0;
-    while (arg != NULL) {
+    char **input_args = malloc(sizeof(char *) * (input_chars_read + 1));
+
+    while (arg) {
         input_args[num_args] = strdup(arg);
         (num_args)++;
         arg = strtok_r(NULL, " ", &saveptr);
     }
+    
     input_args[num_args] = NULL;
-
     free(input);
+
     return input_args;
 }
 
@@ -124,17 +125,18 @@ int builtin_commands_handler(char **args) {
         } else if (chdir(args[1]) != 0) {
             fprintf(stderr, "Error: invalid directory\n");
         }
-        return 1;
+        return EXIT_FAILURE;
     }
 
     if (strcmp(args[0], "exit") == 0) {
         if(num_args != 1) {
             fprintf(stderr, "Error: invalid command\n");
-            return 1;
+            return EXIT_FAILURE;
         }
         memory_cleanup(args);
         exit(EXIT_SUCCESS);
     }
+
     return EXIT_SUCCESS;
 }
 
@@ -146,7 +148,7 @@ char *path_handler(char **args) {
         program_path = strdup(input_path);
     }
     else {
-        if (strchr(input_path, '/') != NULL) {
+        if (strchr(input_path, '/')) {
             program_path = malloc(strlen(input_path) + 3);
             strcpy(program_path, "./");
             strcat(program_path, input_path);
@@ -253,7 +255,8 @@ void single_command_handler(char **args, char *program_path) {
     if (pid < 0) {
         fprintf(stderr, "Error: fork failed, unable to execute command\n");
         return;
-    } else if (pid == 0) {
+    } 
+    else if (pid == 0) {
         signal(SIGINT, SIG_DFL);
         signal(SIGQUIT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
@@ -263,7 +266,8 @@ void single_command_handler(char **args, char *program_path) {
             fprintf(stderr, "Error: invalid program\n");
             exit(EXIT_FAILURE);
         }
-    } else {
+    } 
+    else {
         int status;
         do {
             waitpid(pid, &status, WUNTRACED);
@@ -274,7 +278,8 @@ void single_command_handler(char **args, char *program_path) {
 int has_pipe(char **args) {
     int i = 0;
     int pipe_pos = -1;
-    while (args[i] != NULL) {
+
+    while (args[i]) {
         if (strcmp(args[i], "|") == 0)
             pipe_pos = i;
         i++;
@@ -291,17 +296,17 @@ char ***get_pipe_args(char **args) {
     int num_args = get_num_args(args);
     int i=0;
 
-    while (args[i] != NULL) {
+    while (args[i]) {
         if (strcmp(args[i], "|") == 0)
             pipe_count++;
         i++;
     }
 
-    char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
     int args_pos = 0;
     int counter = 0;
+    char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
 
-    for (int i = 0; i <= num_args; ++i) {
+    for (i = 0; i <= num_args; ++i) {
         if (i == num_args || strcmp(args[i], "|") == 0) {
             int arg_length = i - counter;
             args_pipe[args_pos] = malloc((arg_length + 1) * sizeof(char *));
@@ -326,6 +331,7 @@ char ***get_pipe_args(char **args) {
             counter = i + 1;
         }
     }
+
     args_pipe[pipe_count] = NULL;
     return args_pipe;
 }
@@ -395,30 +401,30 @@ void pipe_commands_handler(char ***args_pipe) {
 
 int get_num_args(char **args) {
     int num_args = 0;
-    while(args[num_args] != NULL) 
+    while(args[num_args]) 
         num_args++;
     return num_args;
 }
 
 int get_num_args_pipe(char ***args_pipe) {
     int num_args_pipe = 0;
-    while(args_pipe[num_args_pipe] != NULL) 
+    while(args_pipe[num_args_pipe]) 
         num_args_pipe++;
     return num_args_pipe;
 }
 
 void memory_cleanup(char **args) {
     int i = 0;
-    while(args[i] != NULL)
+    while(args[i])
         free(args[i++]);
     free(args);
 }
 
 void memory_cleanup_pipe(char ***args_pipe) {
     int i = 0;
-    while(args_pipe[i] != NULL) {
+    while(args_pipe[i]) {
         int j=0;
-        while(args_pipe[i][j] != NULL)
+        while(args_pipe[i][j])
             free(args_pipe[i][j++]);
         free(args_pipe[i++]);
     }
