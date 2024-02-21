@@ -33,7 +33,8 @@ int main(void) {
         char **args = user_input_handler(&num_args);
 
         if (num_args == 0 || args == NULL) {
-            if (args) free(args);
+            if (args) 
+                free(args);
             continue;
         }
 
@@ -50,7 +51,7 @@ int main(void) {
             fprintf(stderr, "Error: fork failed, unable to execute command\n");
             free(program_path);
             memory_cleanup(args);
-            exit(EXIT_FAILURE);
+            continue;
         } else if (pid == 0) {
             signal(SIGINT, SIG_DFL);
             signal(SIGQUIT, SIG_DFL);
@@ -61,6 +62,7 @@ int main(void) {
                     fprintf(stderr, "Error: invalid command\n");
                 if (io_redirection == -2 || io_redirection == -3)
                     fprintf(stderr, "Error: invalid file\n");
+                free(program_path);
                 memory_cleanup(args);
                 exit(EXIT_FAILURE);
             }
@@ -79,6 +81,7 @@ int main(void) {
         free(program_path);
         memory_cleanup(args);
     }
+    return EXIT_SUCCESS;
 }
 
 void memory_cleanup(char **args) {
@@ -135,7 +138,7 @@ int builtin_commands_handler(char **args, int num_args) {
         memory_cleanup(args);
         exit(EXIT_SUCCESS);
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
 
 void command_path_handler(char **args, char **program_path) {
@@ -222,9 +225,8 @@ int io_redirection_handler(char **args) {
             num_args -= 2;
         }
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
-
 
 /*
 References
