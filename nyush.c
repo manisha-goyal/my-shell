@@ -9,9 +9,10 @@
 #include <fcntl.h>
 
 char** get_user_input(int *num_args, int *user_input_status);
-int builtin_commands_handler(char **args, int num_args);
+int builtin_commands_handler(char **args);
 void path_handler(char **args, char **program_path);
-int io_redirection_handler(char **args);
+void input_redirection_handler(char **args);
+void output_redirection_handler(char **args);
 int has_pipe(char **args);
 char ***get_pipe_args(char **args, int num_args, int *num_args_pipe);
 void pipe_commands_handler(char ***args_pipe, int num_args_pipe);
@@ -47,7 +48,7 @@ int main(void) {
                 continue;
         }
 
-        if (builtin_commands_handler(args, num_args)) {
+        if (builtin_commands_handler(args)) {
             memory_cleanup(args);
             continue;
         }
@@ -77,17 +78,8 @@ int main(void) {
                 signal(SIGTSTP, SIG_DFL);
 
                 path_handler(args, &program_path);
-
-                int io_redirection = io_redirection_handler(args);
-                if(io_redirection != 0) {
-                    if (io_redirection == -1)
-                        fprintf(stderr, "Error: invalid command\n");
-                    if (io_redirection == -2 || io_redirection == -3)
-                        fprintf(stderr, "Error: invalid file\n");
-                    free(program_path);
-                    memory_cleanup(args);
-                    exit(EXIT_FAILURE);
-                }
+                input_redirection_handler(args);
+                output_redirection_handler(args);
                 if (execv(program_path, args) == -1) {
                     fprintf(stderr, "Error: invalid program\n");
                     free(program_path);
@@ -144,7 +136,12 @@ char** get_user_input(int *num_args, int *user_input_status) {
     return input_args;
 }
 
-int builtin_commands_handler(char **args, int num_args) {
+int builtin_commands_handler(char **args) {
+
+    int num_args = 0;
+    while(args[num_args] != NULL) 
+        num_args++;
+
     if (strcmp(args[0], "cd") == 0) {
         if (num_args != 2) {
             fprintf(stderr, "Error: invalid command\n");
@@ -190,63 +187,97 @@ void path_handler(char **args, char **program_path) {
     }
 }
 
-int io_redirection_handler(char **args) {
-    int input_count = 0, output_count = 0;
-    char *input_file = NULL, *output_file = NULL;
-    int output_append = 0;
+void input_redirection_handler(char **args) {
+    char *input_file = NULL;
+    int input_count = 0;
+    int input_pos = -1;
     int num_args = 0;
 
     while(args[num_args] != NULL) 
         num_args++;
 
-    for (int i = 0; i < num_args; i++) {
+    for (int i = 0; i < num_args; i++)
         if (strcmp(args[i], "<") == 0) {
-            input_count++;
-            if (input_count > 1 || i + 1 >= num_args) 
-                return -1;
-            input_file = args[i + 1];
-            if (access(input_file, F_OK) != 0) 
-                return -2;
-        } else if (strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0) {
-            output_count++;
-            if (output_count > 1 || i + 1 >= num_args) 
-                return -1;
-            output_file = args[i + 1];
-            output_append = strcmp(args[i], ">>") == 0;
+            input_pos = i;
+            if (++input_count > 1){
+                fprintf(stderr, "Error: invalid command\n");
+                exit(EXIT_FAILURE);
+            }
         }
-    }
 
-    if (input_file) {
+    if(input_pos != -1) {
+        if(input_pos + 1 >= num_args) {
+            fprintf(stderr, "Error: invalid command\n");
+            exit(EXIT_FAILURE);
+        }
+
+        input_file = args[input_pos + 1];
+        if (access(input_file, F_OK) != 0) {
+            fprintf(stderr, "Error: invalid file\n");
+            exit(EXIT_FAILURE);
+        }
+
         int fd_in = open(input_file, O_RDONLY);
-        if (fd_in == -1) 
-            return -3;
+        if (fd_in == -1) {
+            fprintf(stderr, "Error: invalid file\n");
+            exit(EXIT_FAILURE);
+        }
         dup2(fd_in, STDIN_FILENO);
         close(fd_in);
-    }
 
-    if (output_file) {
+        for (int j = input_pos; j < num_args - 2; j++) {
+            args[j] = args[j + 2];
+        }
+        args[num_args - 2] = NULL;
+        args[num_args - 1] = NULL;
+    }
+}
+
+void output_redirection_handler(char **args) {
+    char *output_file = NULL;
+    int output_append = 0;
+    int output_count = 0;
+    int output_pos = -1;
+
+    int num_args = 0;
+
+    while(args[num_args]!=NULL) 
+        num_args++;
+
+    for (int i = 0; i < num_args; i++)
+        if (strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0) {
+            output_pos = i;
+            if (++output_count > 1){
+                fprintf(stderr, "Error: invalid command\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+    if(output_pos != -1) {
+        if(output_pos + 1 >= num_args) {
+            fprintf(stderr, "Error: invalid command\n");
+            exit(EXIT_FAILURE);
+        }
+
+        output_file = args[output_pos + 1];
+        output_append = strcmp(args[output_pos], ">>") == 0;
+
         int fd_out = open(output_file, output_append ? 
-                        O_CREAT | O_WRONLY | O_APPEND
-                        : O_CREAT | O_WRONLY | O_TRUNC, 
+                        O_CREAT | O_WRONLY | O_APPEND : O_CREAT | O_WRONLY | O_TRUNC, 
                         S_IRUSR | S_IWUSR);
-        if (fd_out == -1) 
-            return -3;
+        if (fd_out == -1) {
+            fprintf(stderr, "Error: invalid file\n");
+            exit(EXIT_FAILURE);
+        }
         dup2(fd_out, STDOUT_FILENO);
         close(fd_out);
-    }
 
-    for (int i = 0; i < num_args; i++) {
-        if (args[i] && (strcmp(args[i], "<") == 0 || strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0)) {
-            for (int j = i; j < num_args - 2; j++) {
-                args[j] = args[j + 2];
-            }
-            args[num_args - 2] = NULL;
-            args[num_args - 1] = NULL;
-            i -= 1;
-            num_args -= 2;
+        for (int j = output_pos; j < num_args - 2; j++) {
+            args[j] = args[j + 2];
         }
+        args[num_args - 2] = NULL;
+        args[num_args - 1] = NULL;
     }
-    return EXIT_SUCCESS;
 }
 
 int has_pipe(char **args) {
