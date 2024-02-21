@@ -25,11 +25,11 @@ int main(void) {
     while (1) {
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             printf("[nyush %s]$ ", basename(cwd));
+            fflush(stdout);
         } else {
             fprintf(stderr, "Error in getting base directory, getcwd()\n");
             exit(EXIT_FAILURE);
         }
-        fflush(stdout);
 
         int num_args = 0;
         char **args = user_input_handler(&num_args);
