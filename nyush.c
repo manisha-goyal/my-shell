@@ -53,9 +53,7 @@ int main(void) {
             memory_cleanup(args);
             continue;
         }
-
-        if(pipe_pos != -1) {
-            
+        else if(pipe_pos != -1) {
             int pipefd[2];
             if (pipe(pipefd) == -1) {
                 fprintf(stderr, "Error: pipe failed, unable to execute command\n");
