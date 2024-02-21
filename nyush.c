@@ -14,9 +14,10 @@ void path_handler(char **args, char **program_path);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
 int has_pipe(char **args);
-char ***get_pipe_args(char **args, int *num_args_pipe);
-void pipe_commands_handler(char ***args_pipe, int num_args_pipe);
+char ***get_pipe_args(char **args);
+void pipe_commands_handler(char ***args_pipe);
 int get_num_args(char **args);
+int get_num_args_pipe(char ***args_pipe);
 void memory_cleanup(char **args);
 void memory_cleanup_pipe(char ***args_pipe);
 
@@ -61,9 +62,8 @@ int main(void) {
             continue;
         }
         else if(pipe_pos != -1) {
-            int num_args_pipe = 0;
-            char ***args_pipe = get_pipe_args(args, &num_args_pipe);
-            pipe_commands_handler(args_pipe, num_args_pipe);
+            char ***args_pipe = get_pipe_args(args);
+            pipe_commands_handler(args_pipe);
             memory_cleanup_pipe(args_pipe);
         }
         else {
@@ -287,7 +287,7 @@ int has_pipe(char **args) {
     return pipe_pos;
 }
 
-char ***get_pipe_args(char **args, int *num_args_pipe) {
+char ***get_pipe_args(char **args) {
     int pipe_count = 1;
     int num_args = get_num_args(args);
     int i=0;
@@ -299,7 +299,6 @@ char ***get_pipe_args(char **args, int *num_args_pipe) {
         i++;
     }
 
-    *num_args_pipe = pipe_count;
     char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
     int current_cmd = 0;
     int start = 0;
@@ -325,7 +324,8 @@ char ***get_pipe_args(char **args, int *num_args_pipe) {
     return args_pipe;
 }
 
-void pipe_commands_handler(char ***args_pipe, int num_args_pipe) {
+void pipe_commands_handler(char ***args_pipe) {
+    int num_args_pipe = get_num_args_pipe(args_pipe);
     int pipes[2 * (num_args_pipe - 1)];
     pid_t pids[num_args_pipe];
 
@@ -383,6 +383,13 @@ int get_num_args(char **args) {
     while(args[num_args] != NULL) 
         num_args++;
     return num_args;
+}
+
+int get_num_args_pipe(char ***args_pipe) {
+    int num_args_pipe = 0;
+    while(args_pipe[num_args_pipe] != NULL) 
+        num_args_pipe++;
+    return num_args_pipe;
 }
 
 void memory_cleanup(char **args) {
