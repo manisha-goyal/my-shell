@@ -40,9 +40,7 @@ int main(void) {
         int user_input_status = 0;
         char **args = get_user_input(&user_input_status);
 
-        if(user_input_status != 0) {
-            if (args) 
-                free(args);
+        if(user_input_status != 0 || !args) {
             if (user_input_status == 1)
                 exit(EXIT_SUCCESS);
             else
@@ -108,6 +106,11 @@ char** get_user_input(int *user_input_status) {
         input_args[num_args] = strdup(arg);
         num_args++;
         arg = strtok_r(NULL, " ", &saveptr);
+    }
+
+    if(num_args == 0) {
+        free(input_args);
+        return NULL;
     }
     
     input_args[num_args] = NULL;
@@ -453,6 +456,5 @@ https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
 
 
 /*Todo:
-- Signal handling
 - Milestone 10
 */
