@@ -13,3 +13,4 @@ nyush.o: nyush.c
 .PHONY: clean
 clean:
 	rm -f *.o nyush
+	

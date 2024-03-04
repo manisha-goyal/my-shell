@@ -106,7 +106,7 @@ char** get_user_input(int *user_input_status) {
 
     while (arg) {
         input_args[num_args] = strdup(arg);
-        (num_args)++;
+        num_args++;
         arg = strtok_r(NULL, " ", &saveptr);
     }
     
@@ -445,7 +445,14 @@ https://www.scaler.com/topics/c/string-comparison-in-c/
 https://www.ibm.com/docs/en/zos/2.3.0?topic=functions-chdir-change-working-directory
 https://www.geeksforgeeks.org/concatenating-two-strings-in-c/
 https://www.cs.utexas.edu/~theksong/posts/2020-08-30-using-dup2-to-redirect-output/
+https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
 https://www.educative.io/answers/how-to-use-the-pipe-system-call-for-inter-process-communication
 https://stackoverflow.com/questions/8389033/implementation-of-multiple-pipes-in-c
 https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
+*/
+
+
+/*Todo:
+- Signal handling
+- Milestone 10
 */
