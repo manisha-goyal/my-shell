@@ -141,7 +141,7 @@ char** get_user_input(int *user_input_status) {
     return input_args;
 }
 
-bool builtin_commands_handler(char **args, job_list* jobs_list) {
+bool builtin_commands_handler(char **args, job_list *jobs_list) {
     int num_args = get_num_args(args);
 
     if (strcmp(args[0], "cd") == 0) {
@@ -333,7 +333,7 @@ void output_redirection_handler(char **args) {
     }
 }
 
-void single_command_handler(char **args, char *program_path, job_list* jobs_list) {
+void single_command_handler(char **args, char *program_path, job_list *jobs_list) {
     pid_t pid = fork();
     if (pid < 0) {
         fprintf(stderr, "Error: fork failed, unable to execute command\n");
@@ -419,7 +419,7 @@ char ***get_pipe_args(char **args) {
     return args_pipe;
 }
 
-void pipe_commands_handler(char ***args_pipe, job_list* jobs_list) {
+void pipe_commands_handler(char ***args_pipe, job_list *jobs_list) {
     int num_args_pipe = get_num_args_pipe(args_pipe);
     int pipes[2 * (num_args_pipe - 1)];
     pid_t pids[num_args_pipe];
