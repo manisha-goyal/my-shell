@@ -71,23 +71,24 @@ int main(void) {
 
         int pipe_pos = has_pipe(args);
 
-        if(pipe_pos == 0) {
-            fprintf(stderr, "Error: invalid command\n");
-            memory_cleanup(args);
-            continue;
-        }
-        else if(pipe_pos != -1) {
-            char ***args_pipe = get_pipe_args(args);
-            if(args_pipe == NULL)
-                continue;
-            pipe_commands_handler(args_pipe, &jobs_list);
-            memory_cleanup_pipe(args_pipe);
-        }
-        else {
+        if(pipe_pos == -1) {
             char *program_path = program_path_handler(args);
             single_command_handler(args, program_path, &jobs_list);
             free(program_path);
             memory_cleanup(args);
+        } else {
+            if(pipe_pos == 0) {
+                fprintf(stderr, "Error: invalid command\n");
+                memory_cleanup(args);
+                continue;
+            }
+            else {
+                char ***args_pipe = get_pipe_args(args);
+                if(args_pipe == NULL)
+                    continue;
+                pipe_commands_handler(args_pipe, &jobs_list);
+                memory_cleanup_pipe(args_pipe);
+            }
         }
     }
 
