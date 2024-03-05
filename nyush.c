@@ -438,24 +438,19 @@ void pipe_commands_handler(char ***args_pipe, job_list* jobs_list) {
             signal(SIGQUIT, SIG_DFL);
             signal(SIGTSTP, SIG_DFL);
 
-            if (i == 0) {
+            if (i == 0)
                 input_redirection_handler(args_pipe[i]);
-            }
-            if (i == num_args_pipe - 1) {
+            if (i == num_args_pipe - 1)
                 output_redirection_handler(args_pipe[i]);
-            }
 
-            if (i > 0) {
-                dup2(pipes[(i - 1) * 2], 0);
-            }
+            if (i > 0)
+                dup2(pipes[(i - 1) * 2], STDIN_FILENO);
 
-            if (i < num_args_pipe - 1) {
-                dup2(pipes[i * 2 + 1], 1);
-            }
+            if (i < num_args_pipe - 1)
+                dup2(pipes[i * 2 + 1], STDOUT_FILENO);
 
-            for (int j = 0; j < 2 * (num_args_pipe - 1); j++) {
+            for (int j = 0; j < 2 * (num_args_pipe - 1); j++)
                 close(pipes[j]);
-            }
 
             if (execv(args_pipe[i][0], args_pipe[i]) == -1) {
                 fprintf(stderr, "Error: invalid program\n");
