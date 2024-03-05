@@ -13,3 +13,4 @@ nyush-autograder
 input.txt
 output5.txt
 core
+.metals/metals.lock.db

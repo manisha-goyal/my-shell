@@ -7,16 +7,32 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <stdbool.h>
+
+#define MAX_SUSPENDED_JOBS 100
+
+typedef struct {
+    pid_t pid;                    
+    int job_number;                
+    char **args;                
+} job;
+
+typedef struct {
+    job jobs[MAX_SUSPENDED_JOBS]; 
+    int size;           
+} job_list;
 
 char** get_user_input(int *user_input_status);
-int builtin_commands_handler(char **args);
+bool builtin_commands_handler(char **args, job_list *jobs_list);
+void fg_handler(int job_index, job_list *jobs_list);
 char *path_handler(char **args);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
-void single_command_handler(char **args, char *program_path);
+void single_command_handler(char **args, char *program_path, job_list* jobs_list);
 int has_pipe(char **args);
 char ***get_pipe_args(char **args);
-void pipe_commands_handler(char ***args_pipe);
+void pipe_commands_handler(char ***args_pipe, job_list* jobs_list);
+void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args);
 int get_num_args(char **args);
 int get_num_args_pipe(char ***args_pipe);
 void memory_cleanup(char **args);
@@ -27,8 +43,10 @@ int main(void) {
     signal(SIGQUIT, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
 
-    char cwd[PATH_MAX]; 
+    job_list jobs_list = {0};
+    
     while (1) {
+        char cwd[PATH_MAX]; 
         if (getcwd(cwd, sizeof(cwd))) {
             printf("[nyush %s]$ ", basename(cwd));
             fflush(stdout);
@@ -47,7 +65,7 @@ int main(void) {
                 continue;
         }
 
-        if (builtin_commands_handler(args)) {
+        if (builtin_commands_handler(args, &jobs_list)) {
             memory_cleanup(args);
             continue;
         }
@@ -63,28 +81,32 @@ int main(void) {
             char ***args_pipe = get_pipe_args(args);
             if(args_pipe == NULL)
                 continue;
-            pipe_commands_handler(args_pipe);
+            pipe_commands_handler(args_pipe, &jobs_list);
             memory_cleanup_pipe(args_pipe);
         }
         else {
             char *program_path = path_handler(args);
-            single_command_handler(args, program_path);
+            single_command_handler(args, program_path, &jobs_list);
             free(program_path);
             memory_cleanup(args);
         }
     }
+
+    for (int i = 0; i < jobs_list.size; i++)
+        memory_cleanup(jobs_list.jobs[i].args);
+        
     return EXIT_SUCCESS; 
 }
 
 char** get_user_input(int *user_input_status) {
-    char *input = malloc(1001 * sizeof(char));
+    char *input = NULL;
     size_t input_size = 0;
     ssize_t input_chars_read = getline(&input, &input_size, stdin);
-    *user_input_status = EXIT_SUCCESS;
+    *user_input_status = 0;
 
     if (input_chars_read == -1) {
         if(feof(stdin)) {
-            *user_input_status = EXIT_FAILURE;
+            *user_input_status = 1;
         }
         else {
             *user_input_status = -1;
@@ -108,18 +130,18 @@ char** get_user_input(int *user_input_status) {
         arg = strtok_r(NULL, " ", &saveptr);
     }
 
+    input_args[num_args] = NULL;
+    free(input);
+
     if(num_args == 0) {
         free(input_args);
         return NULL;
     }
-    
-    input_args[num_args] = NULL;
-    free(input);
 
     return input_args;
 }
 
-int builtin_commands_handler(char **args) {
+bool builtin_commands_handler(char **args, job_list* jobs_list) {
     int num_args = get_num_args(args);
 
     if (strcmp(args[0], "cd") == 0) {
@@ -128,19 +150,77 @@ int builtin_commands_handler(char **args) {
         } else if (chdir(args[1]) != 0) {
             fprintf(stderr, "Error: invalid directory\n");
         }
-        return EXIT_FAILURE;
+        return true;
     }
 
     if (strcmp(args[0], "exit") == 0) {
         if(num_args != 1) {
             fprintf(stderr, "Error: invalid command\n");
-            return EXIT_FAILURE;
+            return true;
+        }
+        if(jobs_list->size > 0) {
+            fprintf(stderr, "Error: there are suspended jobs\n");
+            return true;
         }
         memory_cleanup(args);
         exit(EXIT_SUCCESS);
     }
 
-    return EXIT_SUCCESS;
+    if (strcmp(args[0], "jobs") == 0) {
+        if(num_args != 1) {
+            fprintf(stderr, "Error: invalid command\n");
+            return true;
+        }
+        for (int i = 0; i < jobs_list->size; i++) {
+            const job* job = &jobs_list->jobs[i];
+            printf("[%d]", job->job_number);
+            
+            int j = 0;
+            while(job->args[j]) 
+                printf(" %s", job->args[j++]);
+            
+            printf("\n");
+        }
+        return true;
+    }
+
+    if (strcmp(args[0], "fg") == 0) {
+        if (num_args != 2) {
+            fprintf(stderr, "Error: invalid command\n");
+            return true;
+        }
+
+        int job_index = atoi(args[1]) - 1;
+        fg_handler(job_index, jobs_list);
+        
+        return true;
+    }
+
+    return false;
+}
+
+void fg_handler(int job_index, job_list *jobs_list) {
+    if (job_index < 0 || job_index >= jobs_list->size) {
+        fprintf(stderr, "Error: invalid job\n");
+        return;
+    }
+
+    job suspended_job = jobs_list->jobs[job_index];
+
+    for (int i = job_index; i < jobs_list->size - 1; i++) {
+        jobs_list->jobs[i] = jobs_list->jobs[i + 1];
+        jobs_list->jobs[i].job_number = jobs_list->jobs[i].job_number - 1;
+    }
+    jobs_list->size--;
+
+    kill(suspended_job.pid, SIGCONT);
+
+    int status;
+    waitpid(suspended_job.pid, &status, WUNTRACED);
+    if (WIFSTOPPED(status))
+        suspended_job_handler(jobs_list, suspended_job.pid, suspended_job.args);
+    
+    memory_cleanup(suspended_job.args);
 }
 
 char *path_handler(char **args) {
@@ -253,7 +333,7 @@ void output_redirection_handler(char **args) {
     }
 }
 
-void single_command_handler(char **args, char *program_path) {
+void single_command_handler(char **args, char *program_path, job_list* jobs_list) {
     pid_t pid = fork();
     if (pid < 0) {
         fprintf(stderr, "Error: fork failed, unable to execute command\n");
@@ -272,9 +352,9 @@ void single_command_handler(char **args, char *program_path) {
     } 
     else {
         int status;
-        do {
-            waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
+        waitpid(pid, &status, WUNTRACED);
+        if (WIFSTOPPED(status))
+            suspended_job_handler(jobs_list, pid, args);
     }
 }
 
@@ -339,7 +419,7 @@ char ***get_pipe_args(char **args) {
     return args_pipe;
 }
 
-void pipe_commands_handler(char ***args_pipe) {
+void pipe_commands_handler(char ***args_pipe, job_list* jobs_list) {
     int num_args_pipe = get_num_args_pipe(args_pipe);
     int pipes[2 * (num_args_pipe - 1)];
     pid_t pids[num_args_pipe];
@@ -396,10 +476,29 @@ void pipe_commands_handler(char ***args_pipe) {
 
     int status;
     for (int i = 0; i < num_args_pipe; i++) {
-        do {
-            waitpid(pids[i], &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status) && !WIFSTOPPED(status));
+        waitpid(pids[i], &status, WUNTRACED);
+        if (WIFSTOPPED(status))
+            suspended_job_handler(jobs_list, pids[i], args_pipe[i]);
     }
+}
+
+void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args) {
+    if (jobs_list->size >= MAX_SUSPENDED_JOBS) {
+        fprintf(stderr, "Error: maximum number of jobs reached\n");
+        return;
+    }
+    job* job = &jobs_list->jobs[jobs_list->size];
+    job->pid = pid;
+    job->job_number = jobs_list->size + 1;
+
+    int num_args = get_num_args(args);
+    job->args = malloc((num_args + 1) * sizeof(char *));
+
+    for (int i = 0; i < num_args; i++)
+        job->args[i] = strdup(args[i]);
+
+    job->args[num_args] = NULL;
+    jobs_list->size++;
 }
 
 int get_num_args(char **args) {
@@ -452,8 +551,9 @@ https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
 https://www.educative.io/answers/how-to-use-the-pipe-system-call-for-inter-process-communication
 https://stackoverflow.com/questions/8389033/implementation-of-multiple-pipes-in-c
 https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
+https://www.geeksforgeeks.org/c-program-for-char-to-int-conversion/
+https://stackoverflow.com/questions/9296949/how-to-suspend-restart-processes-in-c-linux
 */
-
 
 /*Todo:
 - Milestone 10
