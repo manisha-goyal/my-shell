@@ -172,7 +172,7 @@ bool builtin_commands_handler(char **args, job_list* jobs_list) {
             return true;
         }
         for (int i = 0; i < jobs_list->size; i++) {
-            const job* job = &jobs_list->jobs[i];
+            job *job = &jobs_list->jobs[i];
             printf("[%d]", job->job_number);
             
             int j = 0;
