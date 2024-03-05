@@ -28,11 +28,11 @@ void fg_handler(int job_index, job_list *jobs_list);
 char *path_handler(char **args);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
-void single_command_handler(char **args, char *program_path, job_list* jobs_list);
+void single_command_handler(char **args, char *program_path, job_list *jobs_list);
 int has_pipe(char **args);
 char ***get_pipe_args(char **args);
-void pipe_commands_handler(char ***args_pipe, job_list* jobs_list);
-void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args);
+void pipe_commands_handler(char ***args_pipe, job_list *jobs_list);
+void suspended_job_handler(job_list *jobs_list, pid_t pid, char **args);
 int get_num_args(char **args);
 int get_num_args_pipe(char ***args_pipe);
 void memory_cleanup(char **args);
@@ -487,7 +487,7 @@ void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args) {
         fprintf(stderr, "Error: maximum number of suspended jobs reached\n");
         return;
     }
-    
+
     job* job = &jobs_list->jobs[jobs_list->size];
     job->pid = pid;
     job->job_number = jobs_list->size + 1;
