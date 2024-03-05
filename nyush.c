@@ -28,7 +28,7 @@ void fg_handler(int job_index, job_list *jobs_list);
 char *program_path_handler(char **args);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
-void single_command_handler(char **args, char *program_path, job_list *jobs_list);
+void single_command_handler(char **args, job_list *jobs_list);
 int has_pipe(char **args);
 char ***get_pipe_args(char **args);
 void pipe_commands_handler(char ***args_pipe, job_list *jobs_list);
@@ -72,9 +72,7 @@ int main(void) {
         int pipe_pos = has_pipe(args);
 
         if(pipe_pos == -1) {
-            char *program_path = program_path_handler(args);
-            single_command_handler(args, program_path, &jobs_list);
-            free(program_path);
+            single_command_handler(args, &jobs_list);
             memory_cleanup(args);
         } else {
             if(pipe_pos == 0) {
@@ -333,7 +331,7 @@ void output_redirection_handler(char **args) {
     }
 }
 
-void single_command_handler(char **args, char *program_path, job_list *jobs_list) {
+void single_command_handler(char **args, job_list *jobs_list) {
     pid_t pid = fork();
     if (pid < 0) {
         fprintf(stderr, "Error: fork failed, unable to execute command\n");
@@ -345,10 +343,12 @@ void single_command_handler(char **args, char *program_path, job_list *jobs_list
         signal(SIGTSTP, SIG_DFL);
         input_redirection_handler(args);
         output_redirection_handler(args);
+        char *program_path = program_path_handler(args);
         if (execv(program_path, args) == -1) {
             fprintf(stderr, "Error: invalid program\n");
             exit(EXIT_FAILURE);
         }
+        free(program_path);
     } 
     else {
         int status;
