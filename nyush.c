@@ -23,16 +23,15 @@ typedef struct {
 } job_list;
 
 char** get_user_input(int *user_input_status);
-bool builtin_commands_handler(char **args, job_list *jobs_list);
-void fg_handler(int job_index, job_list *jobs_list);
+char ***get_pipe_args(char **args);
 char *program_path_handler(char **args);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
-void single_command_handler(char **args, job_list *jobs_list);
-int has_pipe(char **args);
-char ***get_pipe_args(char **args);
-void pipe_commands_handler(char ***args_pipe, job_list *jobs_list);
 void suspended_job_handler(job_list *jobs_list, pid_t pid, char **args);
+bool builtin_commands_handler(char **args, job_list *jobs_list);
+void single_command_handler(char **args, job_list *jobs_list);
+void pipe_commands_handler(char ***args_pipe, job_list *jobs_list);
+int has_pipe(char **args);
 int get_num_args(char **args);
 void memory_cleanup(char **args);
 void memory_cleanup_pipe(char ***args_pipe);
@@ -139,86 +138,49 @@ char** get_user_input(int *user_input_status) {
     return input_args;
 }
 
-bool builtin_commands_handler(char **args, job_list *jobs_list) {
+char ***get_pipe_args(char **args) {
+    int pipe_count = 1;
     int num_args = get_num_args(args);
+    int i=0;
 
-    if (strcmp(args[0], "cd") == 0) {
-        if (num_args != 2) {
-            fprintf(stderr, "Error: invalid command\n");
-        } else if (chdir(args[1]) != 0) {
-            fprintf(stderr, "Error: invalid directory\n");
-        }
-        return true;
+    while (args[i]) {
+        if (strcmp(args[i], "|") == 0)
+            pipe_count++;
+        i++;
     }
 
-    if (strcmp(args[0], "exit") == 0) {
-        if(num_args != 1) {
-            fprintf(stderr, "Error: invalid command\n");
-            return true;
-        }
-        if(jobs_list->size > 0) {
-            fprintf(stderr, "Error: there are suspended jobs\n");
-            return true;
-        }
-        memory_cleanup(args);
-        exit(EXIT_SUCCESS);
-    }
+    int args_pos = 0;
+    int counter = 0;
+    char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
 
-    if (strcmp(args[0], "jobs") == 0) {
-        if(num_args != 1) {
-            fprintf(stderr, "Error: invalid command\n");
-            return true;
-        }
-        for (int i = 0; i < jobs_list->size; i++) {
-            job *job = &jobs_list->jobs[i];
-            printf("[%d]", job->job_number);
+    for (i = 0; i <= num_args; i++) {
+        if (i == num_args || strcmp(args[i], "|") == 0) {
+            int arg_length = i - counter;
+            args_pipe[args_pos] = malloc((arg_length + 1) * sizeof(char *));
+
+            for (int j = 0; j < arg_length; j++) {
+                if ((strcmp(args[counter + j], "<") == 0 && args_pos != 0) ||
+                    ((strcmp(args[counter + j], ">") == 0 || strcmp(args[counter + j], ">>") == 0) && args_pos != pipe_count - 1)) {
+                    fprintf(stderr, "Error: invalid command\n");
+                    free(args_pipe);
+                    return NULL;
+                }
+                args_pipe[args_pos][j] = strdup(args[counter + j]);
+            }
             
-            int j = 0;
-            while(job->args[j]) 
-                printf(" %s", job->args[j++]);
+            char *program_path = program_path_handler(args_pipe[args_pos]);
+            free(args_pipe[args_pos][0]);
+            args_pipe[args_pos][0] = strdup(program_path);
+            free(program_path);
             
-            printf("\n");
+            args_pipe[args_pos][arg_length] = NULL;
+            args_pos++;
+            counter = i + 1;
         }
-        return true;
     }
 
-    if (strcmp(args[0], "fg") == 0) {
-        if (num_args != 2) {
-            fprintf(stderr, "Error: invalid command\n");
-            return true;
-        }
-
-        int job_index = atoi(args[1]) - 1;
-        fg_handler(job_index, jobs_list);
-        
-        return true;
-    }
-
-    return false;
-}
-
-void fg_handler(int job_index, job_list *jobs_list) {
-    if (job_index < 0 || job_index >= jobs_list->size) {
-        fprintf(stderr, "Error: invalid job\n");
-        return;
-    }
-
-    job suspended_job = jobs_list->jobs[job_index];
-
-    for (int i = job_index; i < jobs_list->size - 1; i++) {
-        jobs_list->jobs[i] = jobs_list->jobs[i + 1];
-        jobs_list->jobs[i].job_number = jobs_list->jobs[i].job_number - 1;
-    }
-    jobs_list->size--;
-
-    kill(suspended_job.pid, SIGCONT);
-
-    int status;
-    waitpid(suspended_job.pid, &status, WUNTRACED);
-    if (WIFSTOPPED(status))
-        suspended_job_handler(jobs_list, suspended_job.pid, suspended_job.args);
-    
-    memory_cleanup(suspended_job.args);
+    args_pipe[pipe_count] = NULL;
+    return args_pipe;
 }
 
 char *program_path_handler(char **args) {
@@ -331,6 +293,104 @@ void output_redirection_handler(char **args) {
     }
 }
 
+void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args) {
+    if (jobs_list->size >= MAX_SUSPENDED_JOBS) {
+        fprintf(stderr, "Error: maximum number of suspended jobs reached\n");
+        return;
+    }
+
+    job* job = &jobs_list->jobs[jobs_list->size];
+    job->pid = pid;
+    job->job_number = jobs_list->size + 1;
+
+    int num_args = get_num_args(args);
+    job->args = malloc((num_args + 1) * sizeof(char *));
+
+    for (int i = 0; i < num_args; i++)
+        job->args[i] = strdup(args[i]);
+
+    job->args[num_args] = NULL;
+    jobs_list->size++;
+}
+
+bool builtin_commands_handler(char **args, job_list *jobs_list) {
+    int num_args = get_num_args(args);
+
+    if (strcmp(args[0], "cd") == 0) {
+        if (num_args != 2) {
+            fprintf(stderr, "Error: invalid command\n");
+        } else if (chdir(args[1]) != 0) {
+            fprintf(stderr, "Error: invalid directory\n");
+        }
+        return true;
+    }
+
+    if (strcmp(args[0], "exit") == 0) {
+        if(num_args != 1) {
+            fprintf(stderr, "Error: invalid command\n");
+            return true;
+        }
+        if(jobs_list->size > 0) {
+            fprintf(stderr, "Error: there are suspended jobs\n");
+            return true;
+        }
+        memory_cleanup(args);
+        exit(EXIT_SUCCESS);
+    }
+
+    if (strcmp(args[0], "jobs") == 0) {
+        if(num_args != 1) {
+            fprintf(stderr, "Error: invalid command\n");
+            return true;
+        }
+        for (int i = 0; i < jobs_list->size; i++) {
+            job *job = &jobs_list->jobs[i];
+            printf("[%d]", job->job_number);
+            
+            int j = 0;
+            while(job->args[j]) 
+                printf(" %s", job->args[j++]);
+            
+            printf("\n");
+        }
+        return true;
+    }
+
+    if (strcmp(args[0], "fg") == 0) {
+        if (num_args != 2) {
+            fprintf(stderr, "Error: invalid command\n");
+            return true;
+        }
+
+        int job_index = atoi(args[1]) - 1;
+        if (job_index < 0 || job_index >= jobs_list->size) {
+            fprintf(stderr, "Error: invalid job\n");
+            return true;
+        }
+
+        job suspended_job = jobs_list->jobs[job_index];
+
+        for (int i = job_index; i < jobs_list->size - 1; i++) {
+            jobs_list->jobs[i] = jobs_list->jobs[i + 1];
+            jobs_list->jobs[i].job_number = jobs_list->jobs[i].job_number - 1;
+        }
+        jobs_list->size--;
+
+        kill(suspended_job.pid, SIGCONT);
+
+        int status;
+        waitpid(suspended_job.pid, &status, WUNTRACED);
+        if (WIFSTOPPED(status))
+            suspended_job_handler(jobs_list, suspended_job.pid, suspended_job.args);
+        
+        memory_cleanup(suspended_job.args);
+        
+        return true;
+    }
+
+    return false;
+}
+
 void single_command_handler(char **args, job_list *jobs_list) {
     pid_t pid = fork();
     if (pid < 0) {
@@ -356,67 +416,6 @@ void single_command_handler(char **args, job_list *jobs_list) {
         if (WIFSTOPPED(status))
             suspended_job_handler(jobs_list, pid, args);
     }
-}
-
-int has_pipe(char **args) {
-    int i = 0;
-    int pipe_pos = -1;
-
-    while (args[i]) {
-        if (strcmp(args[i], "|") == 0)
-            pipe_pos = i;
-        i++;
-    }
-
-    if(strcmp(args[i-1], "|") == 0)
-        pipe_pos = 0;
-
-    return pipe_pos;
-}
-
-char ***get_pipe_args(char **args) {
-    int pipe_count = 1;
-    int num_args = get_num_args(args);
-    int i=0;
-
-    while (args[i]) {
-        if (strcmp(args[i], "|") == 0)
-            pipe_count++;
-        i++;
-    }
-
-    int args_pos = 0;
-    int counter = 0;
-    char ***args_pipe = malloc(sizeof(char **) * (pipe_count + 1));
-
-    for (i = 0; i <= num_args; i++) {
-        if (i == num_args || strcmp(args[i], "|") == 0) {
-            int arg_length = i - counter;
-            args_pipe[args_pos] = malloc((arg_length + 1) * sizeof(char *));
-
-            for (int j = 0; j < arg_length; j++) {
-                if ((strcmp(args[counter + j], "<") == 0 && args_pos != 0) ||
-                    ((strcmp(args[counter + j], ">") == 0 || strcmp(args[counter + j], ">>") == 0) && args_pos != pipe_count - 1)) {
-                    fprintf(stderr, "Error: invalid command\n");
-                    free(args_pipe);
-                    return NULL;
-                }
-                args_pipe[args_pos][j] = strdup(args[counter + j]);
-            }
-            
-            char *program_path = program_path_handler(args_pipe[args_pos]);
-            free(args_pipe[args_pos][0]);
-            args_pipe[args_pos][0] = strdup(program_path);
-            free(program_path);
-            
-            args_pipe[args_pos][arg_length] = NULL;
-            args_pos++;
-            counter = i + 1;
-        }
-    }
-
-    args_pipe[pipe_count] = NULL;
-    return args_pipe;
 }
 
 void pipe_commands_handler(char ***args_pipe, job_list *jobs_list) {
@@ -480,24 +479,20 @@ void pipe_commands_handler(char ***args_pipe, job_list *jobs_list) {
     }
 }
 
-void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args) {
-    if (jobs_list->size >= MAX_SUSPENDED_JOBS) {
-        fprintf(stderr, "Error: maximum number of suspended jobs reached\n");
-        return;
+int has_pipe(char **args) {
+    int i = 0;
+    int pipe_pos = -1;
+
+    while (args[i]) {
+        if (strcmp(args[i], "|") == 0)
+            pipe_pos = i;
+        i++;
     }
 
-    job* job = &jobs_list->jobs[jobs_list->size];
-    job->pid = pid;
-    job->job_number = jobs_list->size + 1;
+    if(strcmp(args[i-1], "|") == 0)
+        pipe_pos = 0;
 
-    int num_args = get_num_args(args);
-    job->args = malloc((num_args + 1) * sizeof(char *));
-
-    for (int i = 0; i < num_args; i++)
-        job->args[i] = strdup(args[i]);
-
-    job->args[num_args] = NULL;
-    jobs_list->size++;
+    return pipe_pos;
 }
 
 int get_num_args(char **args) {
