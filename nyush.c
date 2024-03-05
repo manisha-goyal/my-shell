@@ -25,7 +25,7 @@ typedef struct {
 char** get_user_input(int *user_input_status);
 bool builtin_commands_handler(char **args, job_list *jobs_list);
 void fg_handler(int job_index, job_list *jobs_list);
-char *path_handler(char **args);
+char *program_path_handler(char **args);
 void input_redirection_handler(char **args);
 void output_redirection_handler(char **args);
 void single_command_handler(char **args, char *program_path, job_list *jobs_list);
@@ -34,7 +34,6 @@ char ***get_pipe_args(char **args);
 void pipe_commands_handler(char ***args_pipe, job_list *jobs_list);
 void suspended_job_handler(job_list *jobs_list, pid_t pid, char **args);
 int get_num_args(char **args);
-int get_num_args_pipe(char ***args_pipe);
 void memory_cleanup(char **args);
 void memory_cleanup_pipe(char ***args_pipe);
 
@@ -85,7 +84,7 @@ int main(void) {
             memory_cleanup_pipe(args_pipe);
         }
         else {
-            char *program_path = path_handler(args);
+            char *program_path = program_path_handler(args);
             single_command_handler(args, program_path, &jobs_list);
             free(program_path);
             memory_cleanup(args);
@@ -223,7 +222,7 @@ void fg_handler(int job_index, job_list *jobs_list) {
     memory_cleanup(suspended_job.args);
 }
 
-char *path_handler(char **args) {
+char *program_path_handler(char **args) {
     char *input_path = args[0];
     char *program_path = NULL;
 
@@ -404,7 +403,7 @@ char ***get_pipe_args(char **args) {
                 args_pipe[args_pos][j] = strdup(args[counter + j]);
             }
             
-            char *program_path = path_handler(args_pipe[args_pos]);
+            char *program_path = program_path_handler(args_pipe[args_pos]);
             free(args_pipe[args_pos][0]);
             args_pipe[args_pos][0] = strdup(program_path);
             free(program_path);
@@ -420,7 +419,10 @@ char ***get_pipe_args(char **args) {
 }
 
 void pipe_commands_handler(char ***args_pipe, job_list *jobs_list) {
-    int num_args_pipe = get_num_args_pipe(args_pipe);
+    int num_args_pipe = 0;
+    while(args_pipe[num_args_pipe]) 
+        num_args_pipe++;
+        
     int pipes[2 * (num_args_pipe - 1)];
     pid_t pids[num_args_pipe];
 
@@ -502,13 +504,6 @@ int get_num_args(char **args) {
     while(args[num_args]) 
         num_args++;
     return num_args;
-}
-
-int get_num_args_pipe(char ***args_pipe) {
-    int num_args_pipe = 0;
-    while(args_pipe[num_args_pipe]) 
-        num_args_pipe++;
-    return num_args_pipe;
 }
 
 void memory_cleanup(char **args) {
