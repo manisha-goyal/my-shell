@@ -516,12 +516,8 @@ void memory_cleanup(char **args) {
 
 void memory_cleanup_pipe(char ***args_pipe) {
     int i = 0;
-    while(args_pipe[i]) {
-        int j=0;
-        while(args_pipe[i][j])
-            free(args_pipe[i][j++]);
-        free(args_pipe[i++]);
-    }
+    while(args_pipe[i])
+        memory_cleanup(args_pipe[i++]);
     free(args_pipe);
 }
 
