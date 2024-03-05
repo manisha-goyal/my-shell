@@ -484,9 +484,10 @@ void pipe_commands_handler(char ***args_pipe, job_list* jobs_list) {
 
 void suspended_job_handler(job_list* jobs_list, pid_t pid, char **args) {
     if (jobs_list->size >= MAX_SUSPENDED_JOBS) {
-        fprintf(stderr, "Error: maximum number of jobs reached\n");
+        fprintf(stderr, "Error: maximum number of suspended jobs reached\n");
         return;
     }
+    
     job* job = &jobs_list->jobs[jobs_list->size];
     job->pid = pid;
     job->job_number = jobs_list->size + 1;
@@ -553,8 +554,5 @@ https://stackoverflow.com/questions/8389033/implementation-of-multiple-pipes-in-
 https://people.cs.rutgers.edu/~pxk/416/notes/c-tutorials/pipe.html
 https://www.geeksforgeeks.org/c-program-for-char-to-int-conversion/
 https://stackoverflow.com/questions/9296949/how-to-suspend-restart-processes-in-c-linux
-*/
-
-/*Todo:
-- Milestone 10
+https://www.educative.io/answers/how-to-use-the-typedef-struct-in-c
 */
