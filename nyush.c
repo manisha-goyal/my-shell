@@ -49,7 +49,7 @@ int main(void) {
             printf("[nyush %s]$ ", basename(cwd));
             fflush(stdout);
         } else {
-            fprintf(stderr, "Error in getting base directory, getcwd()\n");
+            fprintf(stderr, "Error: unable to get base directory\n");
             exit(EXIT_FAILURE);
         }
 
@@ -107,7 +107,7 @@ char** get_user_input(int *user_input_status) {
         }
         else {
             *user_input_status = -1;
-            fprintf(stderr, "Error: getline failed, unable to execute command\n");
+            fprintf(stderr, "Error: unable to take user input, getline failed\n");
         }
         free(input); 
         return NULL;
@@ -394,7 +394,7 @@ bool builtin_commands_handler(char **args, suspended_job_list *suspended_jobs_li
 void single_command_handler(char **args, suspended_job_list *suspended_jobs_list) {
     pid_t pid = fork();
     if (pid < 0) {
-        fprintf(stderr, "Error: fork failed, unable to execute command\n");
+        fprintf(stderr, "Error: unable to execute command, fork failed\n");
         return;
     } 
     else if (pid == 0) {
@@ -428,7 +428,7 @@ void pipe_commands_handler(char ***args_pipe, suspended_job_list *suspended_jobs
 
     for (int i = 0; i < num_args_pipe - 1; i++) {
         if (pipe(pipes + i * 2) < 0) {
-            fprintf(stderr, "Error: pipe failed, unable to execute command\n");
+            fprintf(stderr, "Error: unable to execute command, pipe failed\n");
             return;
         }
     }
@@ -459,7 +459,7 @@ void pipe_commands_handler(char ***args_pipe, suspended_job_list *suspended_jobs
                 exit(EXIT_FAILURE);
             }
         } else if (pid < 0) {
-            fprintf(stderr, "Error: fork failed, unable to execute command\n");
+            fprintf(stderr, "Error: unable to execute command, fork failed\n");
             return;
         }
         else {
