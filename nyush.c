@@ -229,11 +229,6 @@ void input_redirection_handler(char **args) {
         }
 
         input_file = args[input_pos + 1];
-        if (access(input_file, F_OK) != 0) {
-            fprintf(stderr, "Error: invalid file\n");
-            exit(EXIT_FAILURE);
-        }
-
         int fd_in = open(input_file, O_RDONLY);
         if (fd_in == -1) {
             fprintf(stderr, "Error: invalid file\n");
