@@ -1,0 +1,16 @@
+.vscode/launch.json
+.vscode/settings.json
+.vscode/tasks.json
+nyush.dSYM/Contents/Info.plist
+nyush.dSYM/Contents/Resources/DWARF/nyush
+nyush
+.DS_Store
+nyush.o
+.vscode/c_cpp_properties.json
+output.txt
+test.txt
+nyush-autograder
+input.txt
+output5.txt
+core
+.metals/metals.lock.db
