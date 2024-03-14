@@ -1,4 +1,4 @@
-# my-shell
+# My Shell
 Simplified shell project demonstrating basic command handling, I/O redirection, piping, and job control
 
 ## Key Features:
